@@ -48,6 +48,12 @@ function startIdleTimer(guildId: string) {
 
 export const PlayerService = {
   async play(guildId: string, voiceChannelId: string, textChannelId: string, track: Track) {
+    return this.playMultiple(guildId, voiceChannelId, textChannelId, [track]);
+  },
+
+  async playMultiple(guildId: string, voiceChannelId: string, textChannelId: string, tracks: Track[]) {
+    if (tracks.length === 0) return;
+
     clearIdleTimer(guildId);
 
     const shoukaku = getShoukaku();
@@ -57,7 +63,12 @@ export const PlayerService = {
     if (!queue) {
       queue = QueueService.createQueue(guildId, textChannelId);
     }
-    QueueService.addTrack(guildId, track);
+
+    for (const t of tracks) {
+      QueueService.addTrack(guildId, t);
+    }
+
+    const firstTrack = tracks[0];
 
     if (!player) {
       const node = getNode();
@@ -158,13 +169,13 @@ export const PlayerService = {
       
       // Since it's the first track, current is 0
       queue.current = 0;
-      await player.playTrack({ track: { encoded: track.shoukakuTrack.encoded } });
+      await player.playTrack({ track: { encoded: firstTrack.shoukakuTrack.encoded } });
     } else {
       // If player already exists and was idle, start playback
       if (!player.track && queue.tracks.length > 0) {
         clearIdleTimer(guildId);
-        queue.current = queue.tracks.length - 1;
-        await player.playTrack({ track: { encoded: track.shoukakuTrack.encoded } });
+        queue.current = queue.tracks.length - tracks.length;
+        await player.playTrack({ track: { encoded: firstTrack.shoukakuTrack.encoded } });
       }
     }
   },
