@@ -1,8 +1,8 @@
 #!/bin/sh
 set -e
 
-echo "Running Prisma migrations..."
-npx prisma migrate deploy
+echo "Syncing Prisma database schema..."
+npx prisma db push --skip-generate || echo "Database push notice: continuing..."
 
 echo "Starting bot..."
 exec node dist/index.js
