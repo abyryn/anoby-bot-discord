@@ -1,0 +1,76 @@
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID}
+      - DISCORD_GUILD_ID=${DISCORD_GUILD_ID}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - BOT_PREFIX=${BOT_PREFIX:-A!}
+      - BOT_OWNER_ID=${BOT_OWNER_ID}
+      - MAX_AI_CONTEXT=${MAX_AI_CONTEXT:-10}
+      - AI_COOLDOWN=${AI_COOLDOWN:-5}
+      - QUIZ_DURATION=${QUIZ_DURATION:-20}
+      - QUIZ_POINTS=${QUIZ_POINTS:-100}
+      - DATABASE_URL=postgresql://anobystore:anobystore_secret@postgres:5432/anobystore_bot?schema=public
+      - LAVALINK_HOST=lavalink
+      - LAVALINK_PORT=2333
+      - LAVALINK_PASSWORD=youshallnotpass
+      - LAVALINK_SECURE=false
+    depends_on:
+      postgres:
+        condition: service_healthy
+      lavalink:
+        condition: service_healthy
+    networks:
+      - dokploy-network
+      - internal
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: anobystore
+      POSTGRES_PASSWORD: anobystore_secret
+      POSTGRES_DB: anobystore_bot
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U anobystore -d anobystore_bot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - internal
+
+  lavalink:
+    image: ghcr.io/lavalink-devs/lavalink:4
+    restart: unless-stopped
+    environment:
+      - _JAVA_OPTIONS=-Xmx512M
+      - SERVER_PORT=2333
+      - LAVALINK_SERVER_PASSWORD=youshallnotpass
+    volumes:
+      - ./application.yml:/opt/Lavalink/application.yml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:2333/version || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    networks:
+      - internal
+
+networks:
+  dokploy-network:
+    external: true
+  internal:
+    driver: bridge
+
+volumes:
+  pgdata:
+    driver: local

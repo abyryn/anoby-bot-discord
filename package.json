@@ -1,0 +1,37 @@
+{
+  "name": "bot-discord",
+  "version": "1.0.0",
+  "description": "Discord AI Music & Quiz Bot",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "lint": "eslint .",
+    "test": "vitest",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:studio": "prisma studio"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.11.1",
+    "@prisma/client": "^5.14.0",
+    "discord.js": "^14.15.2",
+    "dotenv": "^16.4.5",
+    "pino": "^9.1.0",
+    "shoukaku": "^4.0.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.12",
+    "@typescript-eslint/eslint-plugin": "^7.11.0",
+    "@typescript-eslint/parser": "^7.11.0",
+    "eslint": "^8.57.0",
+    "pino-pretty": "^11.0.0",
+    "prisma": "^5.14.0",
+    "tsx": "^4.11.0",
+    "typescript": "^5.4.5",
+    "vitest": "^1.6.0"
+  }
+}
