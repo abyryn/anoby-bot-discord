@@ -27,8 +27,8 @@ services:
       lavalink:
         condition: service_started
     networks:
+      - default
       - dokploy-network
-      - internal
 
   postgres:
     image: postgres:16-alpine
@@ -46,7 +46,8 @@ services:
       retries: 10
       start_period: 10s
     networks:
-      - internal
+      - default
+      - dokploy-network
 
   lavalink:
     image: ghcr.io/lavalink-devs/lavalink:4
@@ -59,12 +60,13 @@ services:
       - ./application.yml:/opt/Lavalink/application.yml:ro
       - lavalink-plugins:/opt/Lavalink/plugins
     networks:
-      - internal
+      - default
+      - dokploy-network
 
 networks:
   dokploy-network:
     external: true
-  internal:
+  default:
     driver: bridge
 
 volumes:
