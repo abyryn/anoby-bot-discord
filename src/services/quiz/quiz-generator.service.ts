@@ -10,48 +10,65 @@ const CATEGORIES = [
 ];
 
 export class QuizGeneratorService {
-  private genAI: GoogleGenerativeAI;
+  private genAI: GoogleGenerativeAI | null = null;
 
   constructor() {
-    this.genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY || '');
+    if (env.GEMINI_API_KEY) {
+      this.genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY.trim());
+    }
   }
 
   async generateQuestion(category?: string): Promise<QuizQuestion> {
-    try {
-      const selectedCategory = category && CATEGORIES.includes(category) 
-        ? category 
-        : CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
-
-      const model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-      
-      const prompt = `Generate a quiz question for category: ${selectedCategory}. 
-You must respond ONLY with a valid JSON object matching exactly this schema, without markdown formatting like \`\`\`json:
-{
-  "category": "string",
-  "question": "string",
-  "options": ["string", "string", "string", "string"],
-  "correctAnswer": number (0-3 representing the index of the correct option),
-  "explanation": "string"
-}
-Ensure it is culturally relevant if about Indonesia. The language should be Indonesian.`;
-
-      const result = await model.generateContent(prompt);
-      const text = result.response.text();
-      
-      // Clean up potential markdown formatting
-      let jsonString = text.trim();
-      if (jsonString.startsWith('\`\`\`json')) {
-        jsonString = jsonString.replace(/^\`\`\`json\n/, '').replace(/\n\`\`\`$/, '');
-      } else if (jsonString.startsWith('\`\`\`')) {
-        jsonString = jsonString.replace(/^\`\`\`\n/, '').replace(/\n\`\`\`$/, '');
+    if (!this.genAI) {
+      if (env.GEMINI_API_KEY) {
+        this.genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY.trim());
+      } else {
+        throw new Error('GEMINI_API_KEY belum dikonfigurasi.');
       }
-
-      const parsed = JSON.parse(jsonString);
-      return QuizQuestionSchema.parse(parsed);
-    } catch (error) {
-      logger.error({ err: error }, 'Failed to generate quiz question');
-      throw new Error('Failed to generate quiz question');
     }
+
+    const selectedCategory = category && CATEGORIES.includes(category) 
+      ? category 
+      : CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
+
+    const prompt = `Buatkan 1 pertanyaan kuis pilihan ganda untuk kategori: ${selectedCategory}.
+Bahasa pengantar harus bahasa Indonesia yang mudah dipahami.
+Format balasan WAJIB berupa JSON murni tanpa awalan/akhiran markdown seperti \`\`\`json:
+{
+  "category": "${selectedCategory}",
+  "question": "pertanyaan kuis di sini",
+  "options": ["pilihan 1", "pilihan 2", "pilihan 3", "pilihan 4"],
+  "correctAnswer": 0,
+  "explanation": "penjelasan singkat mengapa jawaban tersebut benar"
+}
+Catatan: "correctAnswer" adalah angka index 0, 1, 2, atau 3 sesuai letak jawaban yang benar di array "options".`;
+
+    const modelsToTry = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro'];
+    let lastError: unknown = null;
+
+    for (const modelName of modelsToTry) {
+      try {
+        const model = this.genAI.getGenerativeModel({ model: modelName });
+        const result = await model.generateContent(prompt);
+        const text = result.response.text();
+        
+        let jsonString = text.trim();
+        if (jsonString.startsWith('```json')) {
+          jsonString = jsonString.replace(/^```json\n?/, '').replace(/\n?```$/, '');
+        } else if (jsonString.startsWith('```')) {
+          jsonString = jsonString.replace(/^```\n?/, '').replace(/\n?```$/, '');
+        }
+
+        const parsed = JSON.parse(jsonString.trim());
+        return QuizQuestionSchema.parse(parsed);
+      } catch (error) {
+        lastError = error;
+        logger.warn({ model: modelName, err: error }, `Quiz model ${modelName} failed, trying fallback...`);
+      }
+    }
+
+    logger.error({ err: lastError }, 'Failed to generate quiz question from all models');
+    throw new Error('Gagal membuat kuis otomatis dari AI.');
   }
 }
 

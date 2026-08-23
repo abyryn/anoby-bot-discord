@@ -12,13 +12,13 @@ const command: Command = {
   aliases: ['ask', 'tanya'],
   execute: async (ctx: CommandContext) => {
     try {
-      if (!env.GEMINI_API_KEY) {
-        await ctx.reply({ embeds: [embeds.error('AI belum dikonfigurasi (GEMINI_API_KEY tidak ada).')] });
+      if (!env.GEMINI_API_KEY || env.GEMINI_API_KEY.trim() === '') {
+        await ctx.reply({ embeds: [embeds.error('AI belum dikonfigurasi. Masukkan `GEMINI_API_KEY` di tab Environment Dokploy.')] });
         return;
       }
 
       if (ctx.args.length === 0) {
-        await ctx.reply({ embeds: [embeds.error('Berikan pertanyaan untuk AI.')] });
+        await ctx.reply({ embeds: [embeds.error('Berikan pertanyaan untuk AI. Contoh: `A!ai jelaskan apa itu ECU motor`')] });
         return;
       }
 
@@ -41,11 +41,19 @@ const command: Command = {
       await addMessage(ctx.authorId, ctx.channelId, 'user', prompt);
       await addMessage(ctx.authorId, ctx.channelId, 'ai', response);
 
-      // Reply directly with the content or an embed, PRD usually prefers replies
-      await ctx.reply(response);
-    } catch (error) {
+      // Split response if longer than 2000 characters for Discord limit
+      if (response.length <= 2000) {
+        await ctx.reply(response);
+      } else {
+        const chunks = response.match(/[\s\S]{1,1950}/g) || [response];
+        for (const chunk of chunks) {
+          await ctx.reply(chunk);
+        }
+      }
+    } catch (error: unknown) {
       logger.error({ err: error }, 'Error in ai command');
-      await ctx.reply({ embeds: [embeds.error('Terjadi kesalahan saat memproses permintaan AI.')] });
+      const msg = error instanceof Error ? error.message : 'Terjadi kesalahan saat memproses permintaan AI.';
+      await ctx.reply({ embeds: [embeds.error(`Gagal mendapatkan jawaban AI: ${msg}`)] });
     }
   }
 };

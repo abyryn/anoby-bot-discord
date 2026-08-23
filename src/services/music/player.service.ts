@@ -19,11 +19,20 @@ export const PlayerService = {
 
     if (!player) {
       const node = getNode();
-      player = await shoukaku.joinVoiceChannel({
-        guildId,
-        channelId: voiceChannelId,
-        shardId: 0
-      });
+      const guild = client.guilds.cache.get(guildId);
+      const shardId = guild?.shardId ?? 0;
+
+      try {
+        player = await shoukaku.joinVoiceChannel({
+          guildId,
+          channelId: voiceChannelId,
+          shardId,
+          deaf: true
+        });
+      } catch (err) {
+        logger.error({ err, guildId, voiceChannelId }, 'Failed to join voice channel');
+        throw new Error('Bot gagal masuk ke Voice Channel. Pastikan bot memiliki izin "Connect" dan "Speak" di voice channel.');
+      }
 
       player.on('start', async () => {
         const q = QueueService.getQueue(guildId);
@@ -44,11 +53,11 @@ export const PlayerService = {
         if (reason.reason === 'replaced') return;
         
         const nextTrack = QueueService.nextTrack(guildId);
-        if (nextTrack) {
-          await player!.playTrack({ track: { encoded: nextTrack.shoukakuTrack.encoded } });
+        if (nextTrack && player) {
+          await player.playTrack({ track: { encoded: nextTrack.shoukakuTrack.encoded } });
         } else {
           QueueService.deleteQueue(guildId);
-          await shoukaku.leaveVoiceChannel(guildId);
+          await shoukaku.leaveVoiceChannel(guildId).catch(() => {});
         }
       });
 
@@ -58,7 +67,7 @@ export const PlayerService = {
       });
 
       player.on('exception', (err) => {
-        logger.error({ err }, 'Player error');
+        logger.error({ err }, 'Player error event from Lavalink');
       });
       
       await player.setGlobalVolume(queue.volume);
@@ -66,6 +75,12 @@ export const PlayerService = {
       // Since it's the first track, current is 0
       queue.current = 0;
       await player.playTrack({ track: { encoded: track.shoukakuTrack.encoded } });
+    } else {
+      // If player already exists and is idle, play track
+      if (!player.track && queue.tracks.length > 0) {
+        queue.current = queue.tracks.length - 1;
+        await player.playTrack({ track: { encoded: track.shoukakuTrack.encoded } });
+      }
     }
   },
 
@@ -82,7 +97,7 @@ export const PlayerService = {
   async stop(guildId: string) {
     const shoukaku = getShoukaku();
     QueueService.deleteQueue(guildId);
-    await shoukaku.leaveVoiceChannel(guildId);
+    await shoukaku.leaveVoiceChannel(guildId).catch(() => {});
   },
 
   async setVolume(guildId: string, volume: number) {
