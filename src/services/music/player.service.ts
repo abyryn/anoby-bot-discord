@@ -5,6 +5,7 @@ import { logger } from '../../utils/logger.js';
 import { embeds } from '../../utils/embeds.js';
 import { client } from '../../bot/client.js';
 import { TextChannel } from 'discord.js';
+import { SearchService } from './search.service.js';
 
 // Map to hold idle disconnect timers per guild
 const idleTimers = new Map<string, NodeJS.Timeout>();
@@ -96,19 +97,6 @@ export const PlayerService = {
         
         logger.info({ guildId, reason: reason.reason }, 'Track ended event received');
 
-        if (reason.reason === 'loadFailed') {
-          const q = QueueService.getQueue(guildId);
-          if (q) {
-            try {
-              const current = QueueService.getCurrentTrack(guildId);
-              const channel = await client.channels.fetch(q.textChannelId) as TextChannel;
-              if (channel && current) {
-                await channel.send({ embeds: [embeds.error(`Gagal memuat audio untuk: **${current.title}**. Sumber audio dibatasi oleh penyedia.`)] });
-              }
-            } catch (_) {}
-          }
-        }
-
         const nextTrack = QueueService.nextTrack(guildId);
         if (nextTrack && player) {
           try {
@@ -124,7 +112,6 @@ export const PlayerService = {
 
       player.on('closed', (data) => {
         logger.warn({ guildId, data }, 'Voice connection closed by Discord');
-        // Only cleanup if voice server actually terminated (e.g. 4014 = bot kicked)
         if (data.code === 4014) {
           clearIdleTimer(guildId);
           QueueService.deleteQueue(guildId);
@@ -135,14 +122,35 @@ export const PlayerService = {
       player.on('exception', async (err) => {
         logger.error({ err, guildId }, 'Player exception event from Lavalink');
         const q = QueueService.getQueue(guildId);
-        if (q) {
+        const current = QueueService.getCurrentTrack(guildId);
+
+        if (q && current && player) {
           try {
             const channel = await client.channels.fetch(q.textChannelId) as TextChannel;
+            // If YouTube stream failed, try auto-fallback to SoundCloud stream
+            if (current.url.includes('youtube.com') || current.url.includes('youtu.be')) {
+              if (channel) {
+                await channel.send({ embeds: [embeds.info(`⚠️ Stream YouTube dibatasi penyedia. Mencoba beralih ke sumber audio cadangan untuk: **${current.title}**...`)] });
+              }
+
+              const fallbackTracks = await SearchService.search(current.title, current.requester);
+              const fallbackTrack = fallbackTracks.find(t => !t.url.includes('youtube.com') && !t.url.includes('youtu.be')) || fallbackTracks[0];
+
+              if (fallbackTrack && fallbackTrack.shoukakuTrack.encoded !== current.shoukakuTrack.encoded) {
+                current.shoukakuTrack = fallbackTrack.shoukakuTrack;
+                current.url = fallbackTrack.url;
+                await player.playTrack({ track: { encoded: fallbackTrack.shoukakuTrack.encoded } });
+                return;
+              }
+            }
+
             if (channel) {
-              const errMsg = err.exception?.message || 'Stream tidak dapat dimuat atau dibatasi.';
+              const errMsg = err.exception?.message || 'Stream audio dibatasi oleh penyedia.';
               await channel.send({ embeds: [embeds.error(`Kesalahan saat memutar audio: ${errMsg}`)] });
             }
-          } catch (_) {}
+          } catch (fallbackErr) {
+            logger.error({ err: fallbackErr }, 'Failed during exception fallback');
+          }
         }
       });
       

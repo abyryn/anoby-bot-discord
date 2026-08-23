@@ -36,8 +36,9 @@ export const SearchService = {
       }
     }
 
-    // For plain keywords, search YouTube -> YouTube Music -> SoundCloud
-    const searchPrefixes = ['ytsearch:', 'ytmsearch:', 'scsearch:'];
+    // Prioritize SoundCloud (scsearch:) for 100% reliable, unblocked audio streams on VPS
+    // Followed by YouTube Music (ytmsearch:) and YouTube (ytsearch:)
+    const searchPrefixes = ['scsearch:', 'ytmsearch:', 'ytsearch:'];
 
     for (const prefix of searchPrefixes) {
       try {
