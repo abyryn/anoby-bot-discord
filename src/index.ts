@@ -11,9 +11,11 @@ async function bootstrap() {
     setupReadyEvent(client);
     setupMessageCreateEvent(client);
     
+    // Initialize Lavalink listeners BEFORE client.start() so Shoukaku catches the 'clientReady' event
+    initLavalink();
+
     await loadCommands(client);
     await client.start();
-    initLavalink();
 
     const gracefulShutdown = async (signal: string) => {
       logger.info(`[INFO] Received ${signal}. Starting graceful shutdown...`);
