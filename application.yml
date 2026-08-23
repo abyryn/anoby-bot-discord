@@ -29,10 +29,11 @@ lavalink:
       rotation: true
       channelMix: true
       lowPass: true
+    # --- High Fidelity & Low Latency Audio Tuning ---
     bufferDurationMs: 400
     frameBufferDurationMs: 5000
     opusEncodingQuality: 10
-    resamplingQuality: LOW
+    resamplingQuality: HIGH
     trackStuckThresholdMs: 10000
     useSeekGhosting: true
     youtubePlaylistLoadLimit: 6

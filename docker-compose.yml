@@ -55,7 +55,7 @@ services:
       dockerfile: Dockerfile.lavalink
     restart: unless-stopped
     environment:
-      - _JAVA_OPTIONS=-Xmx512M
+      - _JAVA_OPTIONS=-Xmx768M -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch -XX:MaxGCPauseMillis=20
       - SERVER_PORT=2333
       - LAVALINK_SERVER_PASSWORD=youshallnotpass
     networks:
