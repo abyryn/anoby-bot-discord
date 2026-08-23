@@ -57,6 +57,7 @@ services:
       - LAVALINK_SERVER_PASSWORD=youshallnotpass
     volumes:
       - ./application.yml:/opt/Lavalink/application.yml:ro
+      - lavalink-plugins:/opt/Lavalink/plugins
     networks:
       - internal
 
@@ -68,4 +69,6 @@ networks:
 
 volumes:
   pgdata:
+    driver: local
+  lavalink-plugins:
     driver: local
