@@ -47,7 +47,17 @@ export async function generateResponse(prompt: string, history: Array<{ role: st
     }
   }
 
-  const modelsToTry = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-2.5-flash'];
+  // Prioritize gemini-3.6-flash and current available models
+  const primaryModel = env.GEMINI_MODEL || 'gemini-3.6-flash';
+  const modelsToTry = Array.from(new Set([
+    primaryModel,
+    'gemini-3.6-flash',
+    'gemini-2.0-flash',
+    'gemini-3.6-pro',
+    'gemini-1.5-flash',
+    'gemini-1.5-pro'
+  ]));
+
   let lastError: unknown = null;
 
   for (const modelName of modelsToTry) {
@@ -59,24 +69,42 @@ export async function generateResponse(prompt: string, history: Array<{ role: st
 
       const formattedHistory = formatHistory(history);
 
-      const chat = model.startChat({
-        history: formattedHistory,
-      });
+      let text = '';
 
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('AI response timed out (30s)')), 30000);
-      });
+      if (formattedHistory.length > 0) {
+        try {
+          const chat = model.startChat({
+            history: formattedHistory,
+          });
 
-      const responsePromise = chat.sendMessage(prompt);
-      const result = await Promise.race([responsePromise, timeoutPromise]);
+          const timeoutPromise = new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error('AI response timed out (30s)')), 30000);
+          });
 
-      const text = result.response.text();
-      if (text) {
+          const responsePromise = chat.sendMessage(prompt);
+          const result = await Promise.race([responsePromise, timeoutPromise]);
+          text = result.response.text();
+        } catch (chatErr) {
+          logger.warn({ model: modelName, err: chatErr }, 'Chat with history failed, falling back to direct generateContent');
+          const result = await model.generateContent(prompt);
+          text = result.response.text();
+        }
+      } else {
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('AI response timed out (30s)')), 30000);
+        });
+
+        const responsePromise = model.generateContent(prompt);
+        const result = await Promise.race([responsePromise, timeoutPromise]);
+        text = result.response.text();
+      }
+
+      if (text && text.trim().length > 0) {
         return text.trim();
       }
     } catch (error) {
       lastError = error;
-      logger.warn({ model: modelName, err: error }, `Model ${modelName} failed, trying fallback...`);
+      logger.warn({ model: modelName, err: error }, `Model ${modelName} failed, trying next fallback...`);
     }
   }
 

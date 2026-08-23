@@ -43,7 +43,15 @@ Format balasan WAJIB berupa JSON murni tanpa awalan/akhiran markdown seperti \`\
 }
 Catatan: "correctAnswer" adalah angka index 0, 1, 2, atau 3 sesuai letak jawaban yang benar di array "options".`;
 
-    const modelsToTry = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro'];
+    const primaryModel = env.GEMINI_MODEL || 'gemini-3.6-flash';
+    const modelsToTry = Array.from(new Set([
+      primaryModel,
+      'gemini-3.6-flash',
+      'gemini-2.0-flash',
+      'gemini-3.6-pro',
+      'gemini-1.5-flash'
+    ]));
+
     let lastError: unknown = null;
 
     for (const modelName of modelsToTry) {

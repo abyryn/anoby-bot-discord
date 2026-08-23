@@ -8,6 +8,7 @@ const envSchema = z.object({
   DISCORD_CLIENT_ID: z.string().optional(),
   DISCORD_GUILD_ID: z.string().optional(),
   GEMINI_API_KEY: z.string().optional(),
+  GEMINI_MODEL: z.string().default('gemini-3.6-flash'),
   DATABASE_URL: z.string().min(1),
   LAVALINK_HOST: z.string().default('localhost'),
   LAVALINK_PORT: z.string().transform(Number).default('2333'),
