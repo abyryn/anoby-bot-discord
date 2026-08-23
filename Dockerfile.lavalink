@@ -1,0 +1,15 @@
+FROM ghcr.io/lavalink-devs/lavalink:4
+
+USER root
+
+# Copy config directly into the image to eliminate any bind-mount permission issues in Dokploy
+COPY application.yml /opt/Lavalink/application.yml
+
+# Create plugins directory and grant full ownership to Lavalink container user (UID 322)
+RUN mkdir -p /opt/Lavalink/plugins && \
+    chmod 644 /opt/Lavalink/application.yml && \
+    chown -R 322:322 /opt/Lavalink
+
+USER lavalink
+
+EXPOSE 2333
