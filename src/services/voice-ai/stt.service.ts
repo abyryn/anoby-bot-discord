@@ -8,9 +8,28 @@ if (env.GEMINI_API_KEY) {
 }
 
 /**
+ * Downsample 48kHz Stereo 16-bit PCM to 16kHz Mono 16-bit PCM for 6x smaller audio size and ultra-fast upload
+ */
+export function downsample48kStereoTo16kMono(pcm48kStereo: Buffer): Buffer {
+  const numFramesIn = Math.floor(pcm48kStereo.length / 4);
+  const numFramesOut = Math.floor(numFramesIn / 3);
+  const output = Buffer.alloc(numFramesOut * 2);
+
+  for (let i = 0; i < numFramesOut; i++) {
+    const srcIndex = i * 3 * 4;
+    const left = pcm48kStereo.readInt16LE(srcIndex);
+    const right = pcm48kStereo.readInt16LE(srcIndex + 2);
+    const mono = Math.round((left + right) / 2);
+    output.writeInt16LE(mono, i * 2);
+  }
+
+  return output;
+}
+
+/**
  * Creates a valid RIFF/WAV header for raw PCM audio data
  */
-export function pcmToWav(pcmData: Buffer, sampleRate = 48000, channels = 2, bitsPerSample = 16): Buffer {
+export function pcmToWav(pcmData: Buffer, sampleRate = 16000, channels = 1, bitsPerSample = 16): Buffer {
   const byteRate = (sampleRate * channels * bitsPerSample) / 8;
   const blockAlign = (channels * bitsPerSample) / 8;
   const dataSize = pcmData.length;
@@ -38,6 +57,11 @@ export function pcmToWav(pcmData: Buffer, sampleRate = 48000, channels = 2, bits
   return Buffer.concat([header, pcmData]);
 }
 
+export interface VoiceProcessResult {
+  transcript: string;
+  response: string;
+}
+
 export class SttService {
   private static instance: SttService;
 
@@ -51,9 +75,9 @@ export class SttService {
   }
 
   /**
-   * Transcribe a WAV audio buffer into Indonesian text
+   * Ultra-fast single-pass audio understanding & direct voice response generation in a single API call
    */
-  public async transcribe(wavBuffer: Buffer): Promise<string> {
+  public async processAudioDirect(wavBuffer: Buffer, username = 'User'): Promise<VoiceProcessResult | null> {
     if (!genAI) {
       if (env.GEMINI_API_KEY) {
         genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY.trim());
@@ -71,7 +95,15 @@ export class SttService {
     ]));
 
     const base64Audio = wavBuffer.toString('base64');
-    const prompt = 'Transkripsikan rekaman audio suara ini ke teks bahasa Indonesia secara tepat dan akurat. Balas HANYA dengan teks transkripsi apa yang diucapkan pengguna. Jika audio hanya berupa hening, desah nafas, atau suara latar belakang tanpa kata yang jelas, balas HANYA dengan kata "EMPTY".';
+    const prompt = `Dengarkan rekaman suara dari pengguna (${username}) dalam audio ini.
+Tugas kamu:
+1. Transkripsikan apa yang diucapkan pengguna secara persis dalam bahasa Indonesia.
+2. Buatkan jawaban suara yang ringkas (1-2 kalimat saja, padat, jelas, ramah, dan santai) untuk diucapkan di voice chat.
+Jika audio hanya berupa hening/desah nafas/noise tanpa kata, balas "EMPTY".
+
+Format balasan WAJIB persis:
+TRANSCRIPT: <teks apa yang diucapkan pengguna>
+RESPONSE: <jawaban suara kamu yang ringkas dan santai>`;
 
     for (const modelName of modelsToTry) {
       try {
@@ -87,18 +119,30 @@ export class SttService {
         ]);
 
         const text = result.response.text().trim();
-        if (text && text !== 'EMPTY' && text !== '""' && text !== "''") {
-          // Remove any accidental quotes or formatting
-          return text.replace(/^["']|["']$/g, '').trim();
+        if (!text || text.includes('EMPTY') && !text.includes('TRANSCRIPT:')) {
+          return null;
         }
-        return '';
+
+        const transcriptMatch = text.match(/TRANSCRIPT:\s*([\s\S]*?)(?=RESPONSE:|$)/i);
+        const responseMatch = text.match(/RESPONSE:\s*([\s\S]*?)$/i);
+
+        const transcript = transcriptMatch ? transcriptMatch[1].trim() : '';
+        const response = responseMatch ? responseMatch[1].trim() : text;
+
+        if (!response || response.toLowerCase() === 'empty') {
+          return null;
+        }
+
+        return {
+          transcript: transcript || 'Pesan Suara',
+          response: response.replace(/^["']|["']$/g, '').trim()
+        };
       } catch (error) {
-        logger.warn({ model: modelName, err: error }, 'STT model failed, trying next...');
+        logger.warn({ model: modelName, err: error }, 'Fast voice model call failed, trying next...');
       }
     }
 
-    logger.error('All STT models failed to transcribe audio');
-    return '';
+    return null;
   }
 }
 

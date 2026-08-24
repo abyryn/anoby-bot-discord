@@ -13,10 +13,9 @@ import {
 import prism from 'prism-media';
 import { pipeline } from 'stream';
 import { logger } from '../../utils/logger.js';
-import { pcmToWav, sttService } from './stt.service.js';
+import { downsample48kStereoTo16kMono, pcmToWav, sttService } from './stt.service.js';
 import { ttsService } from './tts.service.js';
-import { generateResponse } from '../ai/gemini.service.js';
-import { getHistory, addMessage } from '../ai/conversation.service.js';
+import { addMessage } from '../ai/conversation.service.js';
 import { client } from '../../bot/client.js';
 import { TextChannel, User } from 'discord.js';
 import { embeds } from '../../utils/embeds.js';
@@ -93,7 +92,7 @@ export class VoiceReceiverService {
       guildId,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       adapterCreator: adapterCreator as any,
-      selfDeaf: false, // Must be false so bot receives incoming user voice packets!
+      selfDeaf: false,
       selfMute: false,
     });
 
@@ -164,13 +163,11 @@ export class VoiceReceiverService {
 
       this.resetIdleTimer(guildId);
 
-      logger.info({ guildId, userId }, 'User speaking in voice channel...');
-
-      // Subscribe to user Opus audio stream until 800ms silence
+      // Subscribe to user Opus audio stream with ultra-fast 450ms silence detection
       const opusStream = receiver.subscribe(userId, {
         end: {
           behavior: EndBehaviorType.AfterSilence,
-          duration: 800,
+          duration: 450,
         },
       });
 
@@ -188,7 +185,6 @@ export class VoiceReceiverService {
       });
 
       decoder.on('error', (err) => {
-        // Non-fatal: ignore corrupt frames from Discord client and continue
         logger.debug({ err, userId }, 'Opus frame decoding notice (ignored)');
       });
 
@@ -199,27 +195,19 @@ export class VoiceReceiverService {
       const processAudio = async () => {
         if (session.isSpeaking || session.isProcessing) return;
 
-        const totalPcm = Buffer.concat(pcmChunks);
-        // Minimum 0.3s of audio to ignore noise/clicks (48000 samples * 2 channels * 2 bytes * 0.3s = 57600 bytes)
-        if (totalPcm.length < 57600) {
+        const totalPcm48k = Buffer.concat(pcmChunks);
+        // Minimum 0.3s of audio (48000 * 2 * 2 * 0.3 = 57600 bytes)
+        if (totalPcm48k.length < 57600) {
           return;
         }
 
         try {
           session.isProcessing = true;
-          const wavBuffer = pcmToWav(totalPcm, 48000, 2, 16);
 
-          logger.info({ guildId, userId, bytes: wavBuffer.length }, 'Processing voice speech to text...');
-          const transcribedText = await sttService.transcribe(wavBuffer);
+          // 1. Downsample from 48kHz Stereo to 16kHz Mono (6x smaller payload, instantaneous upload)
+          const pcm16kMono = downsample48kStereoTo16kMono(totalPcm48k);
+          const wavBuffer = pcmToWav(pcm16kMono, 16000, 1, 16);
 
-          if (!transcribedText || transcribedText.trim().length === 0) {
-            session.isProcessing = false;
-            return;
-          }
-
-          logger.info({ guildId, userId, transcribedText }, 'User spoken text transcribed');
-
-          // Get user details for reference
           let userObj: User | null = null;
           try {
             userObj = await client.users.fetch(userId);
@@ -227,33 +215,39 @@ export class VoiceReceiverService {
 
           const username = userObj?.username || 'User';
 
-          // Get conversation memory
-          const history = await getHistory(userId, textChannelId);
+          // 2. Single-Pass Direct Gemini Audio Processing (STT + Response in one single lightning-fast call)
+          logger.info({ guildId, userId, bytes: wavBuffer.length }, 'Direct single-pass voice processing started...');
+          const result = await sttService.processAudioDirect(wavBuffer, username);
 
-          // Get response from Gemini AI
-          const aiResponse = await generateResponse(transcribedText, history);
+          if (!result || !result.response) {
+            session.isProcessing = false;
+            return;
+          }
+
+          const { transcript, response } = result;
+          logger.info({ guildId, userId, transcript, response }, 'Voice AI response ready');
 
           // Save to database conversation history
-          await addMessage(userId, textChannelId, 'user', transcribedText);
-          await addMessage(userId, textChannelId, 'ai', aiResponse);
+          await addMessage(userId, textChannelId, 'user', transcript);
+          await addMessage(userId, textChannelId, 'ai', response);
 
-          // Convert AI text to natural Indonesian Speech (TTS)
-          const audioStream = await ttsService.textToStream(aiResponse);
+          // 3. Convert AI text to natural Indonesian Speech (TTS)
+          const audioStream = await ttsService.textToStream(response);
           const resource = createAudioResource(audioStream, {
             inputType: StreamType.Arbitrary,
           });
 
-          // Play response in Voice Channel
+          // 4. Play response immediately in Voice Channel
           player.play(resource);
 
-          // Send transcript to text channel for readability
+          // 5. Send transcript to text channel for readability
           try {
             const channel = await client.channels.fetch(textChannelId) as TextChannel;
             if (channel) {
               await channel.send({
                 embeds: [
                   embeds.info(
-                    `🗣️ **${username}:** "${transcribedText}"\n🤖 **Anoby AI:** "${aiResponse}"`
+                    `🗣️ **${username}:** "${transcript}"\n🤖 **Anoby AI:** "${response}"`
                   )
                 ]
               });
@@ -267,7 +261,7 @@ export class VoiceReceiverService {
         }
       };
 
-      // Use stream pipeline for robust backpressure and automatic stream conclusion
+      // Use stream pipeline for robust backpressure and immediate stream finalization
       pipeline(opusStream, decoder, (err) => {
         if (err && err.message !== 'Premature close') {
           logger.debug({ err, userId }, 'Opus stream pipeline closed');
