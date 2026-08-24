@@ -3,6 +3,8 @@ import { env } from '../../config/env.js';
 import { logger } from '../../utils/logger.js';
 
 export async function getHistory(userId: string, channelId: string): Promise<Array<{role: string, content: string}>> {
+  if (!userId || !channelId) return [];
+
   try {
     const messages = await prisma.conversation.findMany({
       where: { userId, channelId },
@@ -16,19 +18,23 @@ export async function getHistory(userId: string, channelId: string): Promise<Arr
       content: msg.content
     }));
   } catch (error) {
-    logger.error({ err: error }, 'Error getting conversation history');
+    logger.warn({ err: error, userId, channelId }, 'Warning: could not get conversation history');
     return [];
   }
 }
 
 export async function addMessage(userId: string, channelId: string, role: string, content: string): Promise<void> {
+  if (!userId || !channelId || !role || !content || content.trim().length === 0) {
+    return;
+  }
+
   try {
     await prisma.conversation.create({
       data: {
         userId,
         channelId,
         role,
-        content
+        content: content.trim()
       }
     });
 
@@ -55,16 +61,18 @@ export async function addMessage(userId: string, channelId: string, role: string
       }
     }
   } catch (error) {
-    logger.error({ err: error }, 'Error adding message to conversation history');
+    logger.warn({ err: error, userId, channelId }, 'Warning: non-critical error saving conversation history');
   }
 }
 
 export async function clearHistory(userId: string, channelId: string): Promise<void> {
+  if (!userId || !channelId) return;
+
   try {
     await prisma.conversation.deleteMany({
       where: { userId, channelId }
     });
   } catch (error) {
-    logger.error({ err: error }, 'Error clearing conversation history');
+    logger.warn({ err: error, userId, channelId }, 'Warning: error clearing conversation history');
   }
 }
