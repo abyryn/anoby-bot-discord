@@ -8,7 +8,7 @@ const envSchema = z.object({
   DISCORD_CLIENT_ID: z.string().optional(),
   DISCORD_GUILD_ID: z.string().optional(),
   GEMINI_API_KEY: z.string().optional(),
-  GEMINI_MODEL: z.string().default('gemini-3.6-flash'),
+  GEMINI_MODEL: z.string().default('gemini-2.0-flash'),
   SPOTIFY_CLIENT_ID: z.string().optional(),
   SPOTIFY_CLIENT_SECRET: z.string().optional(),
   DATABASE_URL: z.string().min(1),

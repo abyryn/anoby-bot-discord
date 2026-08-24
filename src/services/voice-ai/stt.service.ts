@@ -62,12 +62,14 @@ export class SttService {
       }
     }
 
-    const modelsToTry = [
-      env.GEMINI_MODEL || 'gemini-3.6-flash',
-      'gemini-3.6-flash',
+    const primaryModel = env.GEMINI_MODEL || 'gemini-2.0-flash';
+    const modelsToTry = Array.from(new Set([
+      primaryModel,
       'gemini-2.0-flash',
-      'gemini-1.5-flash'
-    ];
+      'gemini-3.6-flash',
+      'gemini-2.0-flash-exp',
+      'gemini-2.0-flash-lite'
+    ]));
 
     const base64Audio = wavBuffer.toString('base64');
     const prompt = 'Transkripsikan rekaman audio suara ini ke teks bahasa Indonesia secara tepat dan akurat. Balas HANYA dengan teks transkripsi apa yang diucapkan pengguna. Jika audio hanya berupa hening, desah nafas, atau suara latar belakang tanpa kata yang jelas, balas HANYA dengan kata "EMPTY".';
