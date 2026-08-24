@@ -11,6 +11,7 @@ import {
   entersState
 } from '@discordjs/voice';
 import prism from 'prism-media';
+import { pipeline } from 'stream';
 import { logger } from '../../utils/logger.js';
 import { pcmToWav, sttService } from './stt.service.js';
 import { ttsService } from './tts.service.js';
@@ -163,13 +164,13 @@ export class VoiceReceiverService {
 
       this.resetIdleTimer(guildId);
 
-      logger.info({ guildId, userId }, 'User started speaking in voice channel');
+      logger.info({ guildId, userId }, 'User speaking in voice channel...');
 
-      // Subscribe to user Opus audio stream until 1000ms silence
+      // Subscribe to user Opus audio stream until 800ms silence
       const opusStream = receiver.subscribe(userId, {
         end: {
           behavior: EndBehaviorType.AfterSilence,
-          duration: 1000,
+          duration: 800,
         },
       });
 
@@ -182,23 +183,25 @@ export class VoiceReceiverService {
 
       const pcmChunks: Buffer[] = [];
 
-      opusStream.pipe(decoder);
-
       decoder.on('data', (chunk: Buffer) => {
         pcmChunks.push(chunk);
       });
 
       decoder.on('error', (err) => {
-        logger.warn({ err, userId }, 'Opus decoding error');
+        // Non-fatal: ignore corrupt frames from Discord client and continue
+        logger.debug({ err, userId }, 'Opus frame decoding notice (ignored)');
       });
 
-      decoder.on('end', async () => {
+      opusStream.on('error', (err) => {
+        logger.debug({ err, userId }, 'Opus stream notice (ignored)');
+      });
+
+      const processAudio = async () => {
         if (session.isSpeaking || session.isProcessing) return;
 
         const totalPcm = Buffer.concat(pcmChunks);
-        // Minimum 0.4s of audio to ignore micro background clicks (48000 samples * 2 channels * 2 bytes * 0.4s = 76800 bytes)
-        if (totalPcm.length < 76800) {
-          logger.info({ guildId, userId, bytes: totalPcm.length }, 'Audio too short, ignoring');
+        // Minimum 0.3s of audio to ignore noise/clicks (48000 samples * 2 channels * 2 bytes * 0.3s = 57600 bytes)
+        if (totalPcm.length < 57600) {
           return;
         }
 
@@ -206,16 +209,15 @@ export class VoiceReceiverService {
           session.isProcessing = true;
           const wavBuffer = pcmToWav(totalPcm, 48000, 2, 16);
 
-          logger.info({ guildId, userId, bytes: wavBuffer.length }, 'Sending user speech audio to Gemini STT...');
+          logger.info({ guildId, userId, bytes: wavBuffer.length }, 'Processing voice speech to text...');
           const transcribedText = await sttService.transcribe(wavBuffer);
 
           if (!transcribedText || transcribedText.trim().length === 0) {
-            logger.info({ guildId, userId }, 'Transcribed text is empty or silence');
             session.isProcessing = false;
             return;
           }
 
-          logger.info({ guildId, userId, transcribedText }, 'User spoken text transcribed successfully');
+          logger.info({ guildId, userId, transcribedText }, 'User spoken text transcribed');
 
           // Get user details for reference
           let userObj: User | null = null;
@@ -263,6 +265,14 @@ export class VoiceReceiverService {
         } finally {
           session.isProcessing = false;
         }
+      };
+
+      // Use stream pipeline for robust backpressure and automatic stream conclusion
+      pipeline(opusStream, decoder, (err) => {
+        if (err && err.message !== 'Premature close') {
+          logger.debug({ err, userId }, 'Opus stream pipeline closed');
+        }
+        processAudio().catch(() => {});
       });
     });
 
