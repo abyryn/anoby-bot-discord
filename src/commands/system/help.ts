@@ -7,29 +7,27 @@ const command: Command = {
   execute: async (ctx: CommandContext) => {
     const embed = new EmbedBuilder()
       .setColor(0x0099ff)
-      .setTitle('🤖 Anobystore BOT')
+      .setTitle('🤖 Anobystore Discord Bot')
       .setDescription(
         `🎵 **MUSIC**\n` +
-        `A!play <lagu>\n` +
-        `A!pause\n` +
-        `A!resume\n` +
-        `A!skip\n` +
-        `A!queue\n` +
-        `A!nowplaying\n` +
-        `A!stop\n\n` +
-        `🤖 **AI**\n` +
-        `A!ai <pertanyaan>\n` +
-        `A!chat <pertanyaan>\n` +
-        `A!ai-clear\n\n` +
+        `\`A!play <lagu/url/spotify>\` — Putar musik dari YouTube / Spotify / SoundCloud\n` +
+        `\`A!pause\` | \`A!resume\` | \`A!skip\` | \`A!stop\`\n` +
+        `\`A!queue\` | \`A!nowplaying\` | \`A!volume\` | \`A!shuffle\` | \`A!loop\`\n\n` +
+        `🎙️ **VOICE AI (Komunikasi Suara)**\n` +
+        `\`A!voiceai start\` — Mulai obrolan suara dua arah lewat mic di Voice Channel\n` +
+        `\`A!voiceai stop\` — Matikan Voice AI & keluar Voice Channel\n` +
+        `\`A!voiceai voice <gadis|ardi>\` — Ganti suara AI (Wanita / Pria)\n` +
+        `\`A!talk <pertanyaan>\` — Tanya AI dan dengarkan jawabannya lewat suara\n\n` +
+        `🤖 **AI CHAT (Teks)**\n` +
+        `\`A!ai <pertanyaan>\` — Chat teks dengan AnobyStore AI\n` +
+        `\`A!chat <pertanyaan>\` — Alias untuk AI chat\n` +
+        `\`A!ai-clear\` — Reset memori percakapan\n\n` +
         `🎮 **QUIZ**\n` +
-        `A!quiz\n` +
-        `A!quiz <kategori>\n` +
-        `A!quiz leaderboard\n` +
-        `A!quiz stop\n\n` +
+        `\`A!quiz\` | \`A!quiz <kategori>\` — Mulai kuis trivia AI interaktif\n` +
+        `\`A!quiz leaderboard\` — Lihat peringkat skor\n` +
+        `\`A!quiz stop\` — Hentikan sesi kuis\n\n` +
         `⚙️ **SYSTEM**\n` +
-        `A!help\n` +
-        `A!ping\n` +
-        `A!stats`
+        `\`A!help\` | \`A!ping\` | \`A!stats\``
       );
 
     await ctx.reply({ embeds: [embed] });
