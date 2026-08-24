@@ -47,15 +47,13 @@ export async function generateResponse(prompt: string, history: Array<{ role: st
     }
   }
 
-  // Prioritize active, currently available Gemini models
-  const primaryModel = env.GEMINI_MODEL || 'gemini-2.0-flash';
+  // Prioritize active, currently supported Gemini 3.x models
+  const primaryModel = env.GEMINI_MODEL || 'gemini-3.6-flash';
   const modelsToTry = Array.from(new Set([
     primaryModel,
-    'gemini-2.0-flash',
     'gemini-3.6-flash',
-    'gemini-2.0-flash-exp',
-    'gemini-3.6-pro',
-    'gemini-2.0-flash-lite'
+    'gemini-3.5-flash-lite',
+    'gemini-3.6-pro'
   ]));
 
   let lastError: unknown = null;

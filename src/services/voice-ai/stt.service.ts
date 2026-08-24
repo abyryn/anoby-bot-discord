@@ -62,13 +62,12 @@ export class SttService {
       }
     }
 
-    const primaryModel = env.GEMINI_MODEL || 'gemini-2.0-flash';
+    const primaryModel = env.GEMINI_MODEL || 'gemini-3.6-flash';
     const modelsToTry = Array.from(new Set([
       primaryModel,
-      'gemini-2.0-flash',
       'gemini-3.6-flash',
-      'gemini-2.0-flash-exp',
-      'gemini-2.0-flash-lite'
+      'gemini-3.5-flash-lite',
+      'gemini-3.6-pro'
     ]));
 
     const base64Audio = wavBuffer.toString('base64');
