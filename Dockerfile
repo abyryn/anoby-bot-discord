@@ -18,7 +18,8 @@ FROM node:22-alpine AS runner
 
 WORKDIR /app
 
-RUN apk add --no-cache dumb-init
+# Install dumb-init and ffmpeg for audio transcoding in Voice AI
+RUN apk add --no-cache dumb-init ffmpeg
 
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/node_modules ./node_modules
