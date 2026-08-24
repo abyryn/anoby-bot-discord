@@ -27,6 +27,24 @@ export function downsample48kStereoTo16kMono(pcm48kStereo: Buffer): Buffer {
 }
 
 /**
+ * Calculate RMS (Root Mean Square) volume level of 16-bit PCM audio
+ * Silence & background noise: RMS < 200
+ * Actual human speech: RMS >= 300 - 3000+
+ */
+export function calculatePcmRms(pcm16bit: Buffer): number {
+  if (pcm16bit.length < 2) return 0;
+  let sumSquares = 0;
+  const numSamples = Math.floor(pcm16bit.length / 2);
+
+  for (let i = 0; i < numSamples; i++) {
+    const sample = pcm16bit.readInt16LE(i * 2);
+    sumSquares += sample * sample;
+  }
+
+  return Math.sqrt(sumSquares / numSamples);
+}
+
+/**
  * Creates a valid RIFF/WAV header for raw PCM audio data
  */
 export function pcmToWav(pcmData: Buffer, sampleRate = 16000, channels = 1, bitsPerSample = 16): Buffer {
@@ -95,15 +113,17 @@ export class SttService {
     ]));
 
     const base64Audio = wavBuffer.toString('base64');
-    const prompt = `Dengarkan rekaman suara dari pengguna (${username}) dalam audio ini.
-Tugas kamu:
-1. Transkripsikan apa yang diucapkan pengguna secara persis dalam bahasa Indonesia.
-2. Buatkan jawaban suara yang ringkas (1-2 kalimat saja, padat, jelas, ramah, dan santai) untuk diucapkan di voice chat.
-Jika audio hanya berupa hening/desah nafas/noise tanpa kata, balas "EMPTY".
+    
+    // Strict prompt to avoid hallucinating username or background noise
+    const prompt = `Kamu adalah AnobyStore AI, asisten voice chat Discord bahasa Indonesia.
+Dengarkan audio suara berikut ini.
 
-Format balasan WAJIB persis:
-TRANSCRIPT: <teks apa yang diucapkan pengguna>
-RESPONSE: <jawaban suara kamu yang ringkas dan santai>`;
+ATURAN KETAT:
+1. Jika audio HANYA berupa hening, desahan, suara nafas, ketikan keyboard, atau suara latar belakang tanpa ucapan kata yang jelas, kamu WAJIB membalas HANYA satu kata: "EMPTY".
+2. Jangan mengarang kata jika tidak ada suara manusia yang berbicara dengan jelas.
+3. Jika ada suara manusia berbicara:
+TRANSCRIPT: <teks apa yang diucapkan secara persis>
+RESPONSE: <jawaban suara kamu yang ringkas (1-2 kalimat), ramah, dan santai>`;
 
     for (const modelName of modelsToTry) {
       try {
@@ -119,23 +139,40 @@ RESPONSE: <jawaban suara kamu yang ringkas dan santai>`;
         ]);
 
         const text = result.response.text().trim();
-        if (!text || text.includes('EMPTY') && !text.includes('TRANSCRIPT:')) {
+        
+        // Ignore empty / silence responses
+        if (!text || text === 'EMPTY' || (text.includes('EMPTY') && !text.includes('TRANSCRIPT:'))) {
           return null;
         }
 
         const transcriptMatch = text.match(/TRANSCRIPT:\s*([\s\S]*?)(?=RESPONSE:|$)/i);
         const responseMatch = text.match(/RESPONSE:\s*([\s\S]*?)$/i);
 
-        const transcript = transcriptMatch ? transcriptMatch[1].trim() : '';
-        const response = responseMatch ? responseMatch[1].trim() : text;
+        let transcript = transcriptMatch ? transcriptMatch[1].trim() : '';
+        let response = responseMatch ? responseMatch[1].trim() : '';
+
+        // If format was not matched, check if text itself contains response
+        if (!transcript && !response) {
+          if (text.toLowerCase().includes('empty')) return null;
+          response = text;
+        }
+
+        // Clean up accidental formatting
+        transcript = transcript.replace(/^["']|["']$/g, '').trim();
+        response = response.replace(/^["']|["']$/g, '').trim();
+
+        // Hallucination filter: ignore if transcript is just the username or empty
+        if (!transcript || transcript.toLowerCase() === username.toLowerCase() || transcript.toLowerCase() === 'empty') {
+          return null;
+        }
 
         if (!response || response.toLowerCase() === 'empty') {
           return null;
         }
 
         return {
-          transcript: transcript || 'Pesan Suara',
-          response: response.replace(/^["']|["']$/g, '').trim()
+          transcript,
+          response
         };
       } catch (error) {
         logger.warn({ model: modelName, err: error }, 'Fast voice model call failed, trying next...');

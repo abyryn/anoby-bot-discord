@@ -13,7 +13,7 @@ import {
 import prism from 'prism-media';
 import { pipeline } from 'stream';
 import { logger } from '../../utils/logger.js';
-import { downsample48kStereoTo16kMono, pcmToWav, sttService } from './stt.service.js';
+import { calculatePcmRms, downsample48kStereoTo16kMono, pcmToWav, sttService } from './stt.service.js';
 import { ttsService } from './tts.service.js';
 import { addMessage } from '../ai/conversation.service.js';
 import { client } from '../../bot/client.js';
@@ -196,16 +196,23 @@ export class VoiceReceiverService {
         if (session.isSpeaking || session.isProcessing) return;
 
         const totalPcm48k = Buffer.concat(pcmChunks);
-        // Minimum 0.3s of audio (48000 * 2 * 2 * 0.3 = 57600 bytes)
-        if (totalPcm48k.length < 57600) {
+        // Minimum 0.4s of audio (48000 * 2 * 2 * 0.4 = 76800 bytes)
+        if (totalPcm48k.length < 76800) {
+          return;
+        }
+
+        // Downsample from 48kHz Stereo to 16kHz Mono
+        const pcm16kMono = downsample48kStereoTo16kMono(totalPcm48k);
+
+        // VAD Audio Energy Check: Filter out silence, breathing, keyboard clicks, or mic background noise
+        const rms = calculatePcmRms(pcm16kMono);
+        if (rms < 250) {
+          logger.debug({ guildId, userId, rms }, 'Audio below voice energy threshold (silence/ambient noise), skipping');
           return;
         }
 
         try {
           session.isProcessing = true;
-
-          // 1. Downsample from 48kHz Stereo to 16kHz Mono (6x smaller payload, instantaneous upload)
-          const pcm16kMono = downsample48kStereoTo16kMono(totalPcm48k);
           const wavBuffer = pcmToWav(pcm16kMono, 16000, 1, 16);
 
           let userObj: User | null = null;
@@ -215,11 +222,11 @@ export class VoiceReceiverService {
 
           const username = userObj?.username || 'User';
 
-          // 2. Single-Pass Direct Gemini Audio Processing (STT + Response in one single lightning-fast call)
-          logger.info({ guildId, userId, bytes: wavBuffer.length }, 'Direct single-pass voice processing started...');
+          // Single-Pass Direct Gemini Audio Processing
+          logger.info({ guildId, userId, bytes: wavBuffer.length, rms }, 'Voice speech detected, processing with AI...');
           const result = await sttService.processAudioDirect(wavBuffer, username);
 
-          if (!result || !result.response) {
+          if (!result || !result.response || !result.transcript) {
             session.isProcessing = false;
             return;
           }
@@ -231,16 +238,16 @@ export class VoiceReceiverService {
           await addMessage(userId, textChannelId, 'user', transcript);
           await addMessage(userId, textChannelId, 'ai', response);
 
-          // 3. Convert AI text to natural Indonesian Speech (TTS)
+          // Convert AI text to natural Indonesian Speech (TTS)
           const audioStream = await ttsService.textToStream(response);
           const resource = createAudioResource(audioStream, {
             inputType: StreamType.Arbitrary,
           });
 
-          // 4. Play response immediately in Voice Channel
+          // Play response immediately in Voice Channel
           player.play(resource);
 
-          // 5. Send transcript to text channel for readability
+          // Send transcript to text channel for readability
           try {
             const channel = await client.channels.fetch(textChannelId) as TextChannel;
             if (channel) {
