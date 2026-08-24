@@ -92,9 +92,17 @@ export class VoiceReceiverService {
       guildId,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       adapterCreator: adapterCreator as any,
-      selfDeaf: false, // Must be false so bot can receive user audio!
+      selfDeaf: false, // Must be false so bot receives incoming user voice packets!
       selfMute: false,
     });
+
+    // Wait until connection is fully ready and UDP socket encryption is established
+    try {
+      await entersState(connection, VoiceConnectionStatus.Ready, 20000);
+      logger.info({ guildId, channelId }, 'Voice connection is READY and listening');
+    } catch (connErr) {
+      logger.warn({ guildId, connErr }, 'Voice connection took longer than 20s to ready');
+    }
 
     const player = createAudioPlayer();
     connection.subscribe(player);
@@ -155,11 +163,13 @@ export class VoiceReceiverService {
 
       this.resetIdleTimer(guildId);
 
-      // Subscribe to user Opus audio stream until 1.2s silence
+      logger.info({ guildId, userId }, 'User started speaking in voice channel');
+
+      // Subscribe to user Opus audio stream until 1000ms silence
       const opusStream = receiver.subscribe(userId, {
         end: {
           behavior: EndBehaviorType.AfterSilence,
-          duration: 1200,
+          duration: 1000,
         },
       });
 
@@ -186,8 +196,9 @@ export class VoiceReceiverService {
         if (session.isSpeaking || session.isProcessing) return;
 
         const totalPcm = Buffer.concat(pcmChunks);
-        // Minimum 0.5s of audio to ignore micro clicks / keyboard sounds (48000 samples * 2 channels * 2 bytes * 0.5s = 96000 bytes)
-        if (totalPcm.length < 96000) {
+        // Minimum 0.4s of audio to ignore micro background clicks (48000 samples * 2 channels * 2 bytes * 0.4s = 76800 bytes)
+        if (totalPcm.length < 76800) {
+          logger.info({ guildId, userId, bytes: totalPcm.length }, 'Audio too short, ignoring');
           return;
         }
 
@@ -195,15 +206,16 @@ export class VoiceReceiverService {
           session.isProcessing = true;
           const wavBuffer = pcmToWav(totalPcm, 48000, 2, 16);
 
-          logger.info({ guildId, userId, bytes: wavBuffer.length }, 'Processing voice speech to text...');
+          logger.info({ guildId, userId, bytes: wavBuffer.length }, 'Sending user speech audio to Gemini STT...');
           const transcribedText = await sttService.transcribe(wavBuffer);
 
           if (!transcribedText || transcribedText.trim().length === 0) {
+            logger.info({ guildId, userId }, 'Transcribed text is empty or silence');
             session.isProcessing = false;
             return;
           }
 
-          logger.info({ guildId, userId, transcribedText }, 'User spoken text transcribed');
+          logger.info({ guildId, userId, transcribedText }, 'User spoken text transcribed successfully');
 
           // Get user details for reference
           let userObj: User | null = null;
