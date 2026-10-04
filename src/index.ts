@@ -2,6 +2,7 @@ import { client } from './bot/client.js';
 import { loadCommands } from './bot/handlers/commandHandler.js';
 import { setupReadyEvent } from './bot/events/ready.js';
 import { setupMessageCreateEvent } from './bot/events/messageCreate.js';
+import { setupVoiceStateUpdateEvent } from './bot/events/voiceStateUpdate.js';
 import { logger } from './utils/logger.js';
 import { initLavalink, getShoukaku } from './services/music/lavalink.service.js';
 import { prisma } from './database/prisma.js';
@@ -10,6 +11,7 @@ async function bootstrap() {
   try {
     setupReadyEvent(client);
     setupMessageCreateEvent(client);
+    setupVoiceStateUpdateEvent(client);
     
     // Initialize Lavalink listeners BEFORE client.start() so Shoukaku catches the 'clientReady' event
     initLavalink();

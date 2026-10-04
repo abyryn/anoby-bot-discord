@@ -32,8 +32,14 @@ export function initLavalink() {
     logger.error({ node: name, err: error }, '[Lavalink] Connection error');
   });
 
-  shoukaku.on('ready', (name) => {
+  shoukaku.on('ready', async (name) => {
     logger.info(`[Lavalink] Node ${name} is CONNECTED and READY! 🎵`);
+    try {
+      const { afkService } = await import('./afk.service.js');
+      await afkService.reconnectAll();
+    } catch (err) {
+      logger.error({ err }, '[AFK] Error during Lavalink ready AFK reconnect');
+    }
   });
 
   shoukaku.on('close', (name, code, reason) => {

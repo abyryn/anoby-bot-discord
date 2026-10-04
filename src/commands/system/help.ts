@@ -12,7 +12,8 @@ const command: Command = {
         `🎵 **MUSIC**\n` +
         `\`A!play <lagu/url/spotify>\` — Putar musik dari YouTube / Spotify / SoundCloud\n` +
         `\`A!pause\` | \`A!resume\` | \`A!skip\` | \`A!stop\`\n` +
-        `\`A!queue\` | \`A!nowplaying\` | \`A!volume\` | \`A!shuffle\` | \`A!loop\`\n\n` +
+        `\`A!queue\` | \`A!nowplaying\` | \`A!volume\` | \`A!shuffle\` | \`A!loop\`\n` +
+        `\`A!afk\` — Mode AFK 24/7 di Voice Channel (bot standby tanpa auto-disconnect)\n\n` +
         `🎙️ **VOICE AI (Komunikasi Suara)**\n` +
         `\`A!voiceai start\` — Mulai obrolan suara dua arah lewat mic di Voice Channel\n` +
         `\`A!voiceai stop\` — Matikan Voice AI & keluar Voice Channel\n` +

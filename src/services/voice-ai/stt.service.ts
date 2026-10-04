@@ -115,7 +115,7 @@ export class SttService {
     const base64Audio = wavBuffer.toString('base64');
     
     // Strict prompt to avoid hallucinating username or background noise
-    const prompt = `Kamu adalah AnobyStore AI, asisten voice chat Discord bahasa Indonesia.
+    const prompt = `Kamu adalah Anoby Bot AI, asisten voice chat Discord bahasa Indonesia, dan suka bercanda, dan sering marah marah atau ngegas ngomongnya.
 Dengarkan audio suara berikut ini.
 
 ATURAN KETAT:

@@ -2,6 +2,7 @@ import { Command, CommandContext } from '../../types/index.js';
 import { PlayerService } from '../../services/music/player.service.js';
 import { isInVoiceChannel } from '../../utils/permissions.js';
 import { embeds } from '../../utils/embeds.js';
+import { afkService } from '../../services/music/afk.service.js';
 
 const command: Command = {
   name: 'stop',
@@ -14,8 +15,16 @@ const command: Command = {
 
     if (!ctx.guildId) return;
 
+    const isAfk = afkService.isAfk(ctx.guildId);
     await PlayerService.stop(ctx.guildId);
-    await ctx.reply({ embeds: [embeds.success('Stopped playback and left the voice channel.')] });
+
+    if (isAfk) {
+      await ctx.reply({
+        embeds: [embeds.success('Musik dihentikan dan antrean dibersihkan. (Bot tetap berada di Voice Channel karena mode AFK 24/7 aktif).')]
+      });
+    } else {
+      await ctx.reply({ embeds: [embeds.success('Stopped playback and left the voice channel.')] });
+    }
   }
 };
 

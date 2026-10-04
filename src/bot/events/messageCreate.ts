@@ -21,6 +21,29 @@ export function setupMessageCreateEvent(client: BotClient) {
 
     if (!command) return;
 
+    // Check channel restriction
+    if (env.BOT_CHANNEL_ID) {
+      const allowedChannels = env.BOT_CHANNEL_ID.split(',').map((id) => id.trim()).filter(Boolean);
+      const isAllowed = allowedChannels.some((id) =>
+        message.channel.id === id || ('parentId' in message.channel && message.channel.parentId === id)
+      );
+
+      if (allowedChannels.length > 0 && !isAllowed) {
+        logger.info(
+          `[BLOCKED] User ${message.author.id} tried to execute ${prefix}${commandName} in unauthorized channel ${message.channel.id}`
+        );
+        const channelList = allowedChannels.map((id) => `<#${id}>`).join(' atau ');
+        try {
+          await message.reply({
+            embeds: [embeds.error(`Bot hanya dapat digunakan di channel ${channelList}!`)]
+          });
+        } catch (e) {
+          logger.error({ err: e }, 'Failed to send channel restriction warning');
+        }
+        return;
+      }
+    }
+
     const ctx: CommandContext = {
       message,
       args,

@@ -6,7 +6,7 @@ import { QuizQuestion, QuizQuestionSchema } from '../../types/quiz.js';
 const CATEGORIES = [
   'Pengetahuan Umum', 'Indonesia', 'Musik', 'Film', 'Game', 
   'Minecraft', 'Teknologi', 'Otomotif', 'Anime', 'Sejarah', 
-  'Geografi', 'Sains', 'Random'
+  'Geografi', 'Sains', 'Random', 'kalkulus'
 ];
 
 export class QuizGeneratorService {
@@ -32,6 +32,7 @@ export class QuizGeneratorService {
       : CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
 
     const prompt = `Buatkan 1 pertanyaan kuis pilihan ganda untuk kategori: ${selectedCategory}.
+cari kuis yang paling susah jika kategorinya kalkulus, dan jangan mengulai kuis yang sama.
 Bahasa pengantar harus bahasa Indonesia yang mudah dipahami.
 Format balasan WAJIB berupa JSON murni tanpa awalan/akhiran markdown seperti \`\`\`json:
 {

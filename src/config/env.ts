@@ -18,6 +18,14 @@ const envSchema = z.object({
   LAVALINK_SECURE: z.string().transform((val) => val === 'true').default('false'),
   BOT_PREFIX: z.string().default('A!'),
   BOT_OWNER_ID: z.string().optional(),
+  BOT_CHANNEL_ID: z
+    .string()
+    .optional()
+    .transform((val) => {
+      const channelId = val?.trim() || process.env.ALLOWED_CHANNEL_ID?.trim() || process.env.CHANNEL_ID?.trim();
+      const cleaned = channelId?.replace(/^["']|["']$/g, '').trim();
+      return cleaned && cleaned !== '' ? cleaned : undefined;
+    }),
   MAX_AI_CONTEXT: z.string().transform(Number).default('10'),
   AI_COOLDOWN: z.string().transform(Number).default('5'),
   QUIZ_DURATION: z.string().transform(Number).default('20'),

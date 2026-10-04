@@ -2,7 +2,7 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-RUN apk add --no-cache python3 make g++
+RUN apk add --no-cache python3 make g++ openssl
 
 COPY package*.json ./
 COPY prisma ./prisma/
@@ -20,8 +20,8 @@ FROM node:22-alpine AS runner
 
 WORKDIR /app
 
-# Install dumb-init and ffmpeg for audio transcoding in Voice AI
-RUN apk add --no-cache dumb-init ffmpeg
+# Install dumb-init and ffmpeg for audio transcoding in Voice AI, and openssl for Prisma
+RUN apk add --no-cache dumb-init ffmpeg openssl
 
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/node_modules ./node_modules

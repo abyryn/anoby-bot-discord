@@ -15,26 +15,27 @@ const command: Command = {
     const h = Math.floor((uptime % (3600 * 24)) / 3600);
     const m = Math.floor((uptime % 3600) / 60);
     
-    const memory = Math.round(process.memoryUsage().heapUsed / 1024 / 1024);
+    const memory = process.memoryUsage();
+    const ramUsage = Math.round(memory.rss / 1024 / 1024);
+    const heapUsage = Math.round(memory.heapUsed / 1024 / 1024);
     const nodeVersion = process.version;
 
     await ctx.reply({
       embeds: [
-        {
-          ...embeds.info(
-            `🤖 **anobystore BOT**\n\n` +
-            `**Servers:** ${guildCount}\n` +
-            `**Users:** ${userCount}\n` +
-            `**Channels:** ${channelCount}\n` +
-            `**Uptime:** ${d}d ${h}h ${m}m\n` +
-            `**Memory:** ${memory} MB\n` +
-            `**Node:** ${nodeVersion}`
-          ),
-          footer: { text: 'by @abiriann.ab' }
-        }
+        embeds.info(
+          ` **Anoby BOT**\n\n` +
+          `**Servers:** ${guildCount}\n` +
+          `**Users:** ${userCount}\n` +
+          `**Channels:** ${channelCount}\n` +
+          `**Uptime:** ${d}d ${h}h ${m}m\n` +
+          `**RAM Bot (RSS):** ${ramUsage} MB\n` +
+          `**Heap:** ${heapUsage} MB\n` +
+          `**Node:** ${nodeVersion}`
+        ).setFooter({ text: 'by @abiriann.ab' })
       ]
     });
   }
 };
 
 export default command;
+
